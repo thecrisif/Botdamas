@@ -119,6 +119,7 @@ body::before {
 .diff-card:hover { transform:translateY(-2px); }
 .diff-card:hover::before { opacity:1; }
 .diff-card:active { transform:scale(0.98); }
+.diff-card { font-family:inherit; text-align:left; width:100%; }
 
 .diff-easy { border-color:rgba(46,204,113,0.4); }
 .diff-easy:hover { box-shadow:0 0 25px rgba(46,204,113,0.3); border-color:rgba(46,204,113,0.8); }
@@ -376,22 +377,24 @@ body::before {
   <div class="menu-label">ELIGE LA DIFICULTAD</div>
 
   <div class="difficulty-cards">
-    <div class="diff-card diff-easy" onclick="iniciarJuego('easy')">
+    <button class="diff-card diff-easy" onclick="iniciarJuego('easy')">
       <span class="diff-icon">🌿</span>
       <div class="diff-name">FÁCIL</div>
       <div class="diff-desc">El bot comete errores — ideal para aprender</div>
-    </div>
-    <div class="diff-card diff-normal" onclick="iniciarJuego('normal')">
+    </button>
+    <button class="diff-card diff-normal" onclick="iniciarJuego('normal')">
       <span class="diff-icon">⚔️</span>
       <div class="diff-name">NORMAL</div>
       <div class="diff-desc">Partida equilibrada — un buen reto</div>
-    </div>
-    <div class="diff-card diff-hard" onclick="iniciarJuego('hard')">
+    </button>
+    <button class="diff-card diff-hard" onclick="iniciarJuego('hard')">
       <span class="diff-icon">💀</span>
       <div class="diff-name">DIFÍCIL</div>
       <div class="diff-desc">IA avanzada — solo para expertos</div>
     </div>
   </div>
+
+  </button>
 
   <div class="creator-badge">⚡ BY THE CRIS IF ⚡</div>
 </div>
@@ -648,4 +651,325 @@ function obtenerMovimientos(r, c, tab) {
   var movs = [];
   var dirs = [];
   if(pieza.color==='white' || pieza.king) dirs.push([-1,-1],[-1,1]);
-  if(piez
+  if(pieza.color==='red'   || pieza.king) dirs.push([1,-1],[1,1]);
+
+  if(pieza.king){
+    for(var i=0;i<dirs.length;i++){
+      for(var step=1;step<8;step++){
+        var nr = r+dirs[i][0]*step, nc = c+dirs[i][1]*step;
+        if(nr<0||nr>=8||nc<0||nc>=8) break;
+        if(tab[nr][nc]) break;
+        movs.push({from:[r,c], to:[nr,nc], captures:[]});
+      }
+    }
+  } else {
+    for(var i=0;i<dirs.length;i++){
+      var nr = r+dirs[i][0], nc = c+dirs[i][1];
+      if(nr>=0&&nr<8&&nc>=0&&nc<8&&!tab[nr][nc]){
+        movs.push({from:[r,c], to:[nr,nc], captures:[]});
+      }
+    }
+  }
+  return movs;
+}
+
+function obtenerMovimientosCaptura(r, c, tab) {
+  var pieza = tab[r][c];
+  if(!pieza) return [];
+
+  var capturas = [];
+  var enemigoColor = pieza.color==='white'?'red':'white';
+
+  if(pieza.king){
+    var dirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
+    for(var i=0;i<dirs.length;i++){
+      var enemigoEncontrado = null;
+      for(var step=1;step<8;step++){
+        var nr = r+dirs[i][0]*step, nc = c+dirs[i][1]*step;
+        if(nr<0||nr>=8||nc<0||nc>=8) break;
+        if(tab[nr][nc]){
+          if(tab[nr][nc].color===enemigoColor && !enemigoEncontrado){
+            enemigoEncontrado = [nr,nc];
+          } else { break; }
+        } else if(enemigoEncontrado){
+          capturas.push({from:[r,c], to:[nr,nc], captures:[enemigoEncontrado]});
+        }
+      }
+    }
+  } else {
+    var dirsNormal = [];
+    if(pieza.color==='white') dirsNormal = [[-1,-1],[-1,1]];
+    else dirsNormal = [[1,-1],[1,1]];
+    for(var i=0;i<dirsNormal.length;i++){
+      var mr = r+dirsNormal[i][0], mc = c+dirsNormal[i][1];
+      var lr = r+dirsNormal[i][0]*2, lc = c+dirsNormal[i][1]*2;
+      if(mr>=0&&mr<8&&mc>=0&&mc<8&&lr>=0&&lr<8&&lc>=0&&lc<8){
+        if(tab[mr][mc]&&tab[mr][mc].color===enemigoColor&&!tab[lr][lc]){
+          capturas.push({from:[r,c], to:[lr,lc], captures:[[mr,mc]]});
+        }
+      }
+    }
+  }
+  return capturas;
+}
+
+// ============================================================
+// OBTENER TODAS LAS CAPTURAS DE UN COLOR
+// ============================================================
+function obtenerTodasCapturas(color) {
+  var todas = [];
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(tablero[r][c]&&tablero[r][c].color===color){
+      var caps = obtenerMovimientosCaptura(r,c,tablero);
+      for(var i=0;i<caps.length;i++) todas.push(caps[i]);
+    }
+  }
+  return todas;
+}
+
+function obtenerTodosMovimientos(color, tab) {
+  var todos = [];
+  // Primero buscar capturas
+  var capturas = [];
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(tab[r][c]&&tab[r][c].color===color){
+      var caps = obtenerMovimientosCaptura(r,c,tab);
+      for(var i=0;i<caps.length;i++) capturas.push(caps[i]);
+    }
+  }
+  if(capturas.length>0) return capturas;
+
+  // Si no hay capturas, movimientos normales
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(tab[r][c]&&tab[r][c].color===color){
+      var movs = obtenerMovimientos(r,c,tab).filter(function(m){ return m.captures.length===0; });
+      for(var i=0;i<movs.length;i++) todos.push(movs[i]);
+    }
+  }
+  return todos;
+}
+
+// ============================================================
+// BOT IA — MINIMAX CON ALPHA-BETA
+// ============================================================
+function moverBot() {
+  botPensando = true;
+  var movs = obtenerTodosMovimientos('red', tablero);
+
+  if(movs.length===0){
+    mostrarModal('🏆','¡GANASTE!','El bot no tiene movimientos','win');
+    botPensando=false; return;
+  }
+
+  var mejorMov = null;
+
+  if(dificultad==='easy'){
+    // Fácil: movimiento aleatorio con preferencia por capturas
+    var capturas = movs.filter(function(m){ return m.captures.length>0; });
+    var pool = capturas.length>0 ? capturas : movs;
+    // 30% de chance de error (ignorar captura)
+    if(capturas.length>0 && Math.random()<0.3) pool=movs;
+    mejorMov = pool[Math.floor(Math.random()*pool.length)];
+  } else {
+    // Normal/Difícil: minimax
+    var profundidad = DEPTH[dificultad];
+    var mejorVal = -Infinity;
+    for(var i=0;i<movs.length;i++){
+      var copia = copiarTablero(tablero);
+      var piezaGuardada = {color:copia[movs[i].from[0]][movs[i].from[1]].color, king:copia[movs[i].from[0]][movs[i].from[1]].king};
+      var capGuardadas = guardarCapturadas(movs[i], copia);
+      ejecutarMovimiento(movs[i], copia);
+      var val = minimax(copia, profundidad-1, -Infinity, Infinity, false);
+      if(val > mejorVal){ mejorVal=val; mejorMov=movs[i]; }
+    }
+  }
+
+  if(!mejorMov){ botPensando=false; return; }
+
+  // Aplicar movimiento del bot
+  ejecutarMovimiento(mejorMov, tablero);
+  ultimoMovimiento = [[mejorMov.from[0],mejorMov.from[1]],[mejorMov.to[0],mejorMov.to[1]]];
+
+  // Coronar rey rojo (llega a fila 7 = lado del jugador)
+  if(mejorMov.to[0]===7 && tablero[mejorMov.to[0]][mejorMov.to[1]] && tablero[mejorMov.to[0]][mejorMov.to[1]].color==='red') tablero[mejorMov.to[0]][mejorMov.to[1]].king=true;
+
+  botPensando = false;
+
+  if(verificarFin()) return;
+
+  turno = 'white';
+  render();
+  setStatus('Tu turno — elige una pieza blanca','you');
+}
+
+// ============================================================
+// MINIMAX CON ALPHA-BETA
+// ============================================================
+function minimax(tab, depth, alpha, beta, maximizando) {
+  if(depth===0) return evaluar(tab);
+
+  var color = maximizando ? 'red' : 'white';
+  var movs = obtenerTodosMovimientos(color, tab);
+
+  if(movs.length===0) return maximizando ? -1000 : 1000;
+
+  if(maximizando){
+    var maxVal = -Infinity;
+    for(var i=0;i<movs.length;i++){
+      var copia = copiarTablero(tab);
+      ejecutarMovimiento(movs[i], copia);
+      var val = minimax(copia, depth-1, alpha, beta, false);
+      if(val>maxVal) maxVal=val;
+      if(val>alpha) alpha=val;
+      if(beta<=alpha) break;
+    }
+    return maxVal;
+  } else {
+    var minVal = Infinity;
+    for(var i=0;i<movs.length;i++){
+      var copia = copiarTablero(tab);
+      ejecutarMovimiento(movs[i], copia);
+      var val = minimax(copia, depth-1, alpha, beta, true);
+      if(val<minVal) minVal=val;
+      if(val<beta) beta=val;
+      if(beta<=alpha) break;
+    }
+    return minVal;
+  }
+}
+
+// ============================================================
+// FUNCIÓN DE EVALUACIÓN
+// ============================================================
+function evaluar(tab) {
+  var score = 0;
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    var p = tab[r][c];
+    if(!p) continue;
+    var val = p.king ? 3 : 1;
+
+    // Bonus por posición
+    if(!p.king){
+      if(p.color==='red') val += (r/7)*0.5;    // avanzar hacia abajo
+      else val += ((7-r)/7)*0.5;                // avanzar hacia arriba
+    }
+
+    // Bonus por control del centro
+    if(c>=2&&c<=5&&r>=2&&r<=5) val += 0.2;
+
+    // Bonus por seguridad en bordes laterales
+    if(c===0||c===7) val += 0.15;
+
+    if(p.color==='red') score+=val;
+    else score-=val;
+  }
+  return score;
+}
+
+// ============================================================
+// UTILIDADES
+// ============================================================
+function copiarTablero(tab) {
+  var copia = [];
+  for(var r=0;r<8;r++){
+    copia[r]=[];
+    for(var c=0;c<8;c++){
+      copia[r][c] = tab[r][c] ? {color:tab[r][c].color, king:tab[r][c].king} : null;
+    }
+  }
+  return copia;
+}
+
+function guardarCapturadas(mov, tab) {
+  var guardadas = [];
+  if(mov.captures){
+    for(var i=0;i<mov.captures.length;i++){
+      var pos = mov.captures[i];
+      if(tab[pos[0]][pos[1]]) guardadas.push({pos:pos, pieza:tab[pos[0]][pos[1]]});
+    }
+  }
+  return guardadas;
+}
+
+// ============================================================
+// VERIFICAR FIN
+// ============================================================
+function verificarFin() {
+  var whites=0, reds=0;
+  for(var r=0;r<8;r++) for(var c=0;c<8;c++){
+    if(tablero[r][c]){
+      if(tablero[r][c].color==='white') whites++;
+      else reds++;
+    }
+  }
+
+  if(whites===0){ render(); mostrarModal('💀','PERDISTE','El bot fue mejor esta vez','lose'); return true; }
+  if(reds===0)  { render(); mostrarModal('🏆','¡GANASTE!','Eliminaste todas las rojas','win'); return true; }
+
+  // Verificar si alguno no puede mover
+  if(turno==='white' && obtenerTodosMovimientos('white',tablero).length===0){
+    render(); mostrarModal('💀','PERDISTE','No tienes movimientos posibles','lose'); return true;
+  }
+  if(turno==='red' && obtenerTodosMovimientos('red',tablero).length===0){
+    render(); mostrarModal('🏆','¡GANASTE!','El bot no tiene movimientos','win'); return true;
+  }
+  return false;
+}
+
+// ============================================================
+// UI
+// ============================================================
+function setStatus(html, tipo) {
+  var el = document.getElementById('status');
+  el.innerHTML = html;
+  el.className = 'status-bar ' + (tipo==='you'?'your-turn':tipo==='bot'?'bot-turn thinking':'');
+}
+
+function mostrarModal(emoji, titulo, sub, tipo) {
+  document.getElementById('modal-emoji').textContent = emoji;
+  var t = document.getElementById('modal-title');
+  t.textContent = titulo;
+  t.className = 'modal-title '+tipo;
+  document.getElementById('modal-sub').textContent = sub;
+  document.getElementById('modal').classList.add('show');
+}
+
+function cerrarModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+function iniciarJuego(diff) {
+  dificultad = diff;
+  var badge = document.getElementById('diff-badge');
+  badge.textContent = diff==='easy'?'FÁCIL':diff==='normal'?'NORMAL':'DIFÍCIL';
+  badge.className = 'diff-badge badge-'+diff;
+
+  document.getElementById('screen-menu').style.display = 'none';
+  document.getElementById('screen-game').style.display = 'flex';
+
+  crearTablero();
+  turno = 'white';
+  seleccionada = null;
+  movimientosValidos = [];
+  ultimoMovimiento = [];
+  debeCapturar = null;
+  botPensando = false;
+  cerrarModal();
+  render();
+  setStatus('Tu turno — elige una pieza blanca','you');
+}
+
+function reiniciarPartida() {
+  cerrarModal();
+  iniciarJuego(dificultad);
+}
+
+function volverMenu() {
+  cerrarModal();
+  document.getElementById('screen-game').style.display = 'none';
+  document.getElementById('screen-menu').style.display = 'flex';
+  botPensando = false;
+}
+</script>
+</body>
+</html>
